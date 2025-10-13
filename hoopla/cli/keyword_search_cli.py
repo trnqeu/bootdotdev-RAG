@@ -3,6 +3,9 @@
 import argparse
 import json
 import string
+import os
+import pickle
+from nltk.stem import PorterStemmer
 
 with open('./data/movies.json', 'r') as f:
     movies_dict = json.load(f)
@@ -11,10 +14,83 @@ movies_list = movies_dict['movies']
 
 PUNCTUATION_REMOVER = str.maketrans("", "", string.punctuation)
 
+# create an instance of the Stemmer
+stemmer = PorterStemmer()
+
 with open('data/stopwords.txt', 'r') as f:
     text = f.read()
 
 STOPWORDS_SET = set(text.splitlines())
+
+class InvertedIndex:
+    def __init__(self):
+        # index: token (string) -> set of document IDs (integers)
+        self.index: dict[str, set[int]] = {}
+        # docmap: document ID (integer) -> document object (dict)
+        self.docmap: dict[int, object] = {}
+    
+    def __add_document_(self, doc_id: int, text: str):
+        '''
+        Tokenize the input text, 
+        then add each token to the index 
+        with the document ID.
+        '''
+        # use the existing tokenizer
+        tokens = tokenizer(text, STOPWORDS_SET)
+
+        for token in tokens:
+            if token not in self.index:
+                self.index[token] = set()
+        self.index[token].add(doc_id)
+
+    def get_documents(self, term: str) -> list[int]:
+        '''
+        Get the set of documents for a given token, 
+        and return them as a list, 
+        sorted in ascending order by document ID.
+        Process the input term (lowercase, stem) to match index keys 
+        '''
+        processed_term = stemmer.stem(term.lower())
+
+        # Get the set of document IDs, or an empty set if the term isn't found
+        doc_ids_set = self.index.get(processed_term, set())
+
+        # Convert the set to a list and sort it
+        return sorted(list(doc_ids_set))
+
+
+    def build(self, movies_list: list[dict]):
+        print("Builing inverted index...")
+        for movie in movies_list:
+            doc_id = movie['id']
+            # Concatenate title and description for indexing
+            text_to_index = f"{movie['title']} {movie['description']}"
+
+            # Add to the index
+            self.__add_document_(doc_id, text_to_index) 
+
+            # Add the full document object to the docmap
+            self.docmap[doc_id] = movie
+
+        print("Index build complete.")
+
+    def save(self):
+        cache_dir = "cache"
+        os.makedirs(cache_dir, exist_ok=True) # create the directory if doesn't exist
+
+        index_path = os.path.join(cache_dir, "index.pkl")
+        docmap_path = os.path.join(cache_dir, "docmap.pkl")
+
+        # Save the index
+        with open(index_path, 'wb') as f:
+            pickle.dump(self.index, f)
+
+        # Save the docmap
+        with open(docmap_path, 'wb') as f:
+            pickle.dump(self.docmap, f)
+        print(f"Document map saved to {docmap_path}")
+        
+
 
 def remove_punctuation(text: str) -> str:
     # Remove punctuation from a string
@@ -25,7 +101,8 @@ def tokenizer(text: str, stopwords: set[str]) -> set[str]:
     processed_text = remove_punctuation(text).lower()
     
     # split by whitespace to get tokens
-    tokens = {token for token in processed_text.split() if token}
+    tokens = {stemmer.stem(token) for token in processed_text.split() if token}
+
 
     # use set difference to remove stopwords
     return tokens - stopwords
@@ -39,6 +116,8 @@ def main() -> None:
     search_parser = subparsers.add_parser("search", help="Search movies using BM25")
     search_parser.add_argument("query", type=str, help="Search query")
 
+    # build command parser
+    subparsers.add_parser("build", help="Build and save inverted index")
     args = parser.parse_args()
 
     results = []
@@ -78,11 +157,7 @@ def main() -> None:
 
                 if is_match:
                     results.append(movie)
-
-
-
-               
-              
+          
 
             results.sort(key= lambda movie: movie['id'], reverse=False)
 
@@ -91,6 +166,23 @@ def main() -> None:
             if final_results:
                 for index, movie in enumerate(final_results):
                     print(f"{index+1}. {movie['title']}")
+        
+        case "build":
+            # create InvertedIndex instance
+            index = InvertedIndex()
+
+            # build the index
+            index.build(movies_list)
+
+            # save the index
+            index.save()
+
+            # test lookup and print
+            docs = index.get_documents('merida')
+            print(f"First document for token 'merida' = {docs[0]}")
+
+
+        
         case _:
             parser.print_help()
 
