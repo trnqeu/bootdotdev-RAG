@@ -41,7 +41,7 @@ class InvertedIndex:
         for token in tokens:
             if token not in self.index:
                 self.index[token] = set()
-        self.index[token].add(doc_id)
+            self.index[token].add(doc_id)
 
     def get_documents(self, term: str) -> list[int]:
         '''
@@ -177,9 +177,6 @@ def main() -> None:
             # save the index
             index.save()
 
-            # test lookup and print
-            docs = index.get_documents('merida')
-            print(f"First document for token 'merida' = {docs[0]}")
 
 
         
