@@ -89,8 +89,31 @@ class InvertedIndex:
         with open(docmap_path, 'wb') as f:
             pickle.dump(self.docmap, f)
         print(f"Document map saved to {docmap_path}")
-        
 
+    def load(self):
+        cache_dir = "cache"
+
+        index_path = os.path.join(cache_dir, "index.pkl")
+        docmap_path = os.path.join(cache_dir, "docmap.pkl")
+
+        # Load the index
+        try:
+            with open(index_path, 'rb') as f:
+                self.index = pickle.load(f)
+            print('index loaded')
+        except Exception as e:
+            raise FileNotFoundError(f"Error loading index file: {e}")
+
+
+        # Load the docmap
+        try:
+            with open(docmap_path, 'rb') as f:
+                self.docmap = pickle.load(f)
+            print('docmap loaded')
+        except Exception as e:
+            raise FileNotFoundError(f"Error loading the docmap: {e}")
+             
+    
 
 def remove_punctuation(text: str) -> str:
     # Remove punctuation from a string
@@ -110,6 +133,8 @@ def tokenizer(text: str, stopwords: set[str]) -> set[str]:
 
 
 def main() -> None:
+    # create InvertedIndex instance
+    index = InvertedIndex()
     parser = argparse.ArgumentParser(description="Keyword Search CLI")
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
@@ -126,51 +151,85 @@ def main() -> None:
         case "search":
             query = args.query
             # processed_query = remove_punctuation(query).lower()
-            query_tokens = tokenizer(query, STOPWORDS_SET)
-            
             
             # print the search query here
             print(f"Searching for: {query}")
 
+            try: 
+                index.load()
+            except FileNotFoundError as e:
+                print(f"\n{e}")
+
+            query_tokens = tokenizer(query, STOPWORDS_SET)
             if not query_tokens:
                 print("Invalid search")
                 return
+            # search using the index
+            
+            # crea set vuoto degli id univoci
+            results_ids = set()
 
-            for movie in movies_list: 
-                # remove punctuation from title
-                # processed_title = remove_punctuation(movie['title']).lower()              
-                title_tokens = tokenizer(movie['title'], STOPWORDS_SET)
-                
-                # set.intersection() returns a new set containing elements common to both sets.
-                # If the resulting set is non-empty, there is at least one matching token.
-                # matching_tokens = [query_tokens.intersection(title_tokens) ]
-                # new matching logic to match substrings, like 'shot' in 'killshot'
-                is_match = False
+            # variabile massimo numero di risultati = 5
+            MAX_RESULTS = 5
 
-                for q_token in query_tokens:
-                    for t_token in title_tokens:
-                        if q_token in t_token:
-                            is_match = True
+            # itera su ogni token della query, trova gli id dei documenti, 
+            for token in query_tokens:
+                # use the index to get doc ids for this token
+                doc_ids = index.get_documents(token)
+
+                for doc_id in doc_ids:
+                    if doc_id not in results_ids:
+                        results_ids.add(doc_id)
+
+                        if len(results_ids) >= MAX_RESULTS:
                             break
-                    if is_match:
-                        break
 
-                if is_match:
-                    results.append(movie)
+                if len(results_ids) >= MAX_RESULTS:
+                    break
+
+            print(f"\nFound {len(results_ids)} unique results:")
+
+            sorted_doc_ids = sorted(list(results_ids))
+
+            for index_num, doc_id in enumerate(results_ids):
+                # use the docmap to retrieve titles
+                movie = index.docmap.get(doc_id)
+                if movie:
+                    print(f"{index_num + 1}: ID: {doc_id} - Title: {movie['title']}")
+               
+
+            # for movie in movies_list: 
+            #     # remove punctuation from title
+            #     # processed_title = remove_punctuation(movie['title']).lower()              
+            #     title_tokens = tokenizer(movie['title'], STOPWORDS_SET)
+                
+            #     # set.intersection() returns a new set containing elements common to both sets.
+            #     # If the resulting set is non-empty, there is at least one matching token.
+            #     # matching_tokens = [query_tokens.intersection(title_tokens) ]
+            #     # new matching logic to match substrings, like 'shot' in 'killshot'
+            #     is_match = False
+
+            #     for q_token in query_tokens:
+            #         for t_token in title_tokens:
+            #             if q_token in t_token:
+            #                 is_match = True
+            #                 break
+            #         if is_match:
+            #             break
+
+            #     if is_match:
+            #         results.append(movie)
           
 
-            results.sort(key= lambda movie: movie['id'], reverse=False)
+            # results.sort(key= lambda movie: movie['id'], reverse=False)
 
-            final_results = results[:5]
+            # final_results = results[:5]
 
-            if final_results:
-                for index, movie in enumerate(final_results):
-                    print(f"{index+1}. {movie['title']}")
+            # if final_results:
+            #     for index, movie in enumerate(final_results):
+            #         print(f"{index+1}. {movie['title']}")
         
         case "build":
-            # create InvertedIndex instance
-            index = InvertedIndex()
-
             # build the index
             index.build(movies_list)
 
