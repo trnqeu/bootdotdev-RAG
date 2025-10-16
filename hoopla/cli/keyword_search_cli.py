@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-
 import argparse
 import json
 import string
 import os
 import pickle
+from collections import Counter
 from nltk.stem import PorterStemmer
+
 
 with open('./data/movies.json', 'r') as f:
     movies_dict = json.load(f)
@@ -28,7 +29,9 @@ class InvertedIndex:
         self.index: dict[str, set[int]] = {}
         # docmap: document ID (integer) -> document object (dict)
         self.docmap: dict[int, object] = {}
-    
+        self.term_frequencies: dict[int, Counter] = {}
+
+        
     def __add_document_(self, doc_id: int, text: str):
         '''
         Tokenize the input text, 
@@ -38,7 +41,9 @@ class InvertedIndex:
         # use the existing tokenizer
         tokens = tokenizer(text, STOPWORDS_SET)
 
-        for token in tokens:
+        self.term_frequencies[doc_id] = Counter(tokens) 
+
+        for token in set(tokens):
             if token not in self.index:
                 self.index[token] = set()
             self.index[token].add(doc_id)
@@ -80,6 +85,8 @@ class InvertedIndex:
 
         index_path = os.path.join(cache_dir, "index.pkl")
         docmap_path = os.path.join(cache_dir, "docmap.pkl")
+        term_frequency_path = os.path.join(cache_dir, 'term_frequency.pkl')
+
 
         # Save the index
         with open(index_path, 'wb') as f:
@@ -90,11 +97,17 @@ class InvertedIndex:
             pickle.dump(self.docmap, f)
         print(f"Document map saved to {docmap_path}")
 
+        # Save the term-frequency index
+        with open(term_frequency_path, 'wb') as f:
+            pickle.dump(self.term_frequencies, f)
+        print(f"Document term-frequency index saved to {term_frequency_path}")
+
     def load(self):
         cache_dir = "cache"
 
         index_path = os.path.join(cache_dir, "index.pkl")
         docmap_path = os.path.join(cache_dir, "docmap.pkl")
+        term_frequency_path = os.path.join(cache_dir, 'term_frequency.pkl')
 
         # Load the index
         try:
@@ -104,7 +117,6 @@ class InvertedIndex:
         except Exception as e:
             raise FileNotFoundError(f"Error loading index file: {e}")
 
-
         # Load the docmap
         try:
             with open(docmap_path, 'rb') as f:
@@ -112,8 +124,37 @@ class InvertedIndex:
             print('docmap loaded')
         except Exception as e:
             raise FileNotFoundError(f"Error loading the docmap: {e}")
-             
-    
+
+        # Load the term-frequency-index
+        try:
+            with open(term_frequency_path, 'rb') as f:
+                self.term_frequencies = pickle.load(f)
+            print('term-frequency loaded')
+        except Exception as e:
+            raise FileNotFoundError(f"Error loading the term-frequency index: {e}")
+        
+    def get_tf(self, doc_id: int, term: str) -> int:
+        """
+        Return the times the token appears in the document with the given ID.
+        """
+        # tokenize input
+        tokenized_terms = tokenizer(term, STOPWORDS_SET)
+
+        # Enforce the single-token requirement
+        if len(tokenized_terms) == 0:
+            return 0
+        elif len(tokenized_terms) > 1:
+            raise ValueError(f"Expected a single term. Input: {term}")
+
+        single_token = tokenized_terms[0]
+
+        # get the document tf
+        doc_term_counts = self.term_frequencies.get(doc_id)
+
+        if doc_term_counts is None:
+            return 0
+
+        return doc_term_counts.get(single_token, 0)     
 
 def remove_punctuation(text: str) -> str:
     # Remove punctuation from a string
@@ -124,13 +165,13 @@ def tokenizer(text: str, stopwords: set[str]) -> set[str]:
     processed_text = remove_punctuation(text).lower()
     
     # split by whitespace to get tokens
-    tokens = {stemmer.stem(token) for token in processed_text.split() if token}
-
+    tokens = [
+        stemmer.stem(token) 
+        for token in processed_text.split() 
+        if token and token not in stopwords]
 
     # use set difference to remove stopwords
-    return tokens - stopwords
-
-
+    return tokens
 
 def main() -> None:
     # create InvertedIndex instance
@@ -143,8 +184,14 @@ def main() -> None:
 
     # build command parser
     subparsers.add_parser("build", help="Build and save inverted index")
-    args = parser.parse_args()
+    
 
+    # tf parser
+    tf_parser = subparsers.add_parser("tf", help="Prints term frequency in a document")
+    tf_parser.add_argument("doc_id", type=int, help="The id of the document searched")
+    tf_parser.add_argument("term", type=str, help="The term to search")
+
+    args = parser.parse_args()
     results = []
 
     match args.command:
@@ -196,38 +243,6 @@ def main() -> None:
                 movie = index.docmap.get(doc_id)
                 if movie:
                     print(f"{index_num + 1}: ID: {doc_id} - Title: {movie['title']}")
-               
-
-            # for movie in movies_list: 
-            #     # remove punctuation from title
-            #     # processed_title = remove_punctuation(movie['title']).lower()              
-            #     title_tokens = tokenizer(movie['title'], STOPWORDS_SET)
-                
-            #     # set.intersection() returns a new set containing elements common to both sets.
-            #     # If the resulting set is non-empty, there is at least one matching token.
-            #     # matching_tokens = [query_tokens.intersection(title_tokens) ]
-            #     # new matching logic to match substrings, like 'shot' in 'killshot'
-            #     is_match = False
-
-            #     for q_token in query_tokens:
-            #         for t_token in title_tokens:
-            #             if q_token in t_token:
-            #                 is_match = True
-            #                 break
-            #         if is_match:
-            #             break
-
-            #     if is_match:
-            #         results.append(movie)
-          
-
-            # results.sort(key= lambda movie: movie['id'], reverse=False)
-
-            # final_results = results[:5]
-
-            # if final_results:
-            #     for index, movie in enumerate(final_results):
-            #         print(f"{index+1}. {movie['title']}")
         
         case "build":
             # build the index
@@ -236,14 +251,22 @@ def main() -> None:
             # save the index
             index.save()
 
+        case "tf":
+            doc_id = args.doc_id
+            term = args.term
 
+            try: 
+                frequency = index.get_tf(doc_id, term)
+                print(frequency)
+            except ValueError as e:
+                # This catches the exception raised in get_tf if the input term tokenizes into multiple words
+                print(f"Error: {e}")
+            except KeyError:
+                # Catches if doc_id doesn't exist (though get_tf should handle it gracefully)
+                print(0)
 
-        
         case _:
             parser.print_help()
-
-    
-
 
 if __name__ == "__main__":
     main()
