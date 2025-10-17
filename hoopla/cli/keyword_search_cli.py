@@ -4,6 +4,7 @@ import json
 import string
 import os
 import pickle
+import math
 from collections import Counter
 from nltk.stem import PorterStemmer
 
@@ -30,6 +31,7 @@ class InvertedIndex:
         # docmap: document ID (integer) -> document object (dict)
         self.docmap: dict[int, object] = {}
         self.term_frequencies: dict[int, Counter] = {}
+        self.length: int
 
         
     def __add_document_(self, doc_id: int, text: str):
@@ -48,6 +50,11 @@ class InvertedIndex:
                 self.index[token] = set()
             self.index[token].add(doc_id)
 
+    def get_document_count(self) -> int:
+        # returns the number of documents in the index
+        return len(self.docmap)        
+    
+
     def get_documents(self, term: str) -> list[int]:
         '''
         Get the set of documents for a given token, 
@@ -62,6 +69,14 @@ class InvertedIndex:
 
         # Convert the set to a list and sort it
         return sorted(list(doc_ids_set))
+    
+    def get_df(self, term: str) -> int:
+        '''
+        get the term frequency
+        '''
+        # Process the input term (lowercase, stem) to match index keys
+        processed_term = stemmer.stem(term.lower())
+        return len(self.index.get(processed_term, set()))
 
 
     def build(self, movies_list: list[dict]):
@@ -160,7 +175,7 @@ def remove_punctuation(text: str) -> str:
     # Remove punctuation from a string
     return text.translate(PUNCTUATION_REMOVER)
 
-def tokenizer(text: str, stopwords: set[str]) -> set[str]:
+def tokenizer(text: str, stopwords: list[str]) -> set[str]:
     # word tokenizer
     processed_text = remove_punctuation(text).lower()
     
@@ -190,6 +205,10 @@ def main() -> None:
     tf_parser = subparsers.add_parser("tf", help="Prints term frequency in a document")
     tf_parser.add_argument("doc_id", type=int, help="The id of the document searched")
     tf_parser.add_argument("term", type=str, help="The term to search")
+
+    # idf parser
+    idf_parser = subparsers.add_parser("idf", help="Prints term inverse frequency")
+    idf_parser.add_argument("idf_term", type=str, help="The term to search")
 
     args = parser.parse_args()
     results = []
@@ -256,6 +275,13 @@ def main() -> None:
             term = args.term
 
             try: 
+                # load the index
+                index.load()
+            except FileNotFoundError as e:
+                print(f"\n{e}")
+
+
+            try: 
                 frequency = index.get_tf(doc_id, term)
                 print(frequency)
             except ValueError as e:
@@ -264,6 +290,26 @@ def main() -> None:
             except KeyError:
                 # Catches if doc_id doesn't exist (though get_tf should handle it gracefully)
                 print(0)
+
+        case "idf":
+            idf_term = args.idf_term
+
+            try: 
+                # load the index
+                index.load()
+            except FileNotFoundError as e:
+                print(f"\n{e}")
+                return
+
+            doc_count = index.get_document_count()
+            term_doc_count = index.get_df(idf_term)
+
+            idf = math.log((doc_count + 1) / (term_doc_count + 1))
+
+            print(f"Inverse document frequency of '{args.idf_term}': {idf:.2f}")
+
+
+
 
         case _:
             parser.print_help()
