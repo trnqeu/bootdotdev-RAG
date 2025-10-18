@@ -200,7 +200,6 @@ def main() -> None:
     # build command parser
     subparsers.add_parser("build", help="Build and save inverted index")
     
-
     # tf parser
     tf_parser = subparsers.add_parser("tf", help="Prints term frequency in a document")
     tf_parser.add_argument("doc_id", type=int, help="The id of the document searched")
@@ -209,6 +208,12 @@ def main() -> None:
     # idf parser
     idf_parser = subparsers.add_parser("idf", help="Prints term inverse frequency")
     idf_parser.add_argument("idf_term", type=str, help="The term to search")
+
+    # tfidf parser
+    tfidf_parser = subparsers.add_parser("tfidf", help="Prints term inverse frequency")
+    tfidf_parser.add_argument("doc_id", type=int, help="The id of the document searched")
+    tfidf_parser.add_argument("term", type=str, help="The term to search")
+
 
     args = parser.parse_args()
     results = []
@@ -308,9 +313,42 @@ def main() -> None:
 
             print(f"Inverse document frequency of '{args.idf_term}': {idf:.2f}")
 
+        case "tfidf":
+            doc_id = args.doc_id
+            term = args.term
 
+            try: 
+                # load the index
+                index.load()
+            except FileNotFoundError as e:
+                print(f"\n{e}")
+                return
+            
+            try: 
+                tf = index.get_tf(doc_id, term)
+            except ValueError as e:
+                # This catches the exception raised in get_tf if the input term tokenizes into multiple words
+                print(f"Error: {e}")
+            except KeyError:
+                # Catches if doc_id doesn't exist (though get_tf should handle it gracefully)
+                print(0)
 
+            try:
+                doc_count = index.get_document_count()
+                term_doc_count = index.get_df(term)
 
+                idf = math.log((doc_count + 1) / (term_doc_count + 1))
+            
+            except KeyError:
+                print(0)
+
+            try:
+                tfidf = tf*idf
+                print(f"TF-IDF score of '{args.term}' in document '{args.doc_id}': {tfidf:.2f}")
+            except KeyError:
+                print(0)
+
+            
         case _:
             parser.print_help()
 
