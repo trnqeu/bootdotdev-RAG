@@ -9,6 +9,7 @@ from nltk.stem import PorterStemmer
 from .search_utils import (
     CACHE_DIR,
     DEFAULT_SEARCH_LIMIT,
+    BM25_K1,
     load_movies,
     load_stopwords,
 )
@@ -20,7 +21,7 @@ class InvertedIndex:
         self.docmap: dict[int, dict] = {}
         self.index_path = os.path.join(CACHE_DIR, "index.pkl")
         self.docmap_path = os.path.join(CACHE_DIR, "docmap.pkl")
-        self.tf_path = os.path.join(CACHE_DIR, "term_frequencies.pkl")
+        self.tf_path = os.path.join(CACHE_DIR, "term_frequency.pkl")
         self.term_frequencies = defaultdict(Counter)
 
     def build(self) -> None:
@@ -87,6 +88,11 @@ class InvertedIndex:
         tf = self.get_tf(doc_id, term)
         idf = self.get_idf(term)
         return tf * idf
+    
+    def get_bm25_tf(self, doc_id: int, term: str, k1: float = BM25_K1) -> float:
+        raw_tf = self.get_tf(doc_id, term)
+        saturated_tf = (raw_tf * (k1 + 1)) / (raw_tf + k1)
+        return saturated_tf
 
 
 def build_command() -> None:
@@ -163,3 +169,8 @@ def tfidf_command(doc_id: int, term: str) -> float:
     idx = InvertedIndex()
     idx.load()
     return idx.get_tf_idf(doc_id, term)
+
+def bm25_tf_command(doc_id: int, term: str, k1:float = BM25_K1):
+    idx = InvertedIndex()
+    idx.load()
+    return idx.get_bm25_tf(doc_id, term)
