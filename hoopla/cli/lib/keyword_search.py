@@ -10,6 +10,7 @@ from .search_utils import (
     CACHE_DIR,
     DEFAULT_SEARCH_LIMIT,
     BM25_K1,
+    BM25_B,
     load_movies,
     load_stopwords,
 )
@@ -23,7 +24,9 @@ class InvertedIndex:
         self.docmap_path = os.path.join(CACHE_DIR, "docmap.pkl")
         self.tf_path = os.path.join(CACHE_DIR, "term_frequency.pkl")
         self.term_frequencies = defaultdict(Counter)
-
+        self.doc_lengths: dict = {}
+        self.doc_lengths_path = os.path.join(CACHE_DIR, "doc_lengths.pkl")
+        
     def build(self) -> None:
         movies = load_movies()
         for m in movies:
@@ -40,6 +43,8 @@ class InvertedIndex:
             pickle.dump(self.docmap, f)
         with open(self.tf_path, "wb") as f:
             pickle.dump(self.term_frequencies, f)
+        with open(self.doc_lengths_path, 'wb') as f:
+            pickle.dump(self.doc_lengths, f)
 
     def load(self) -> None:
         with open(self.index_path, "rb") as f:
@@ -48,6 +53,8 @@ class InvertedIndex:
             self.docmap = pickle.load(f)
         with open(self.tf_path, "rb") as f:
             self.term_frequencies = pickle.load(f)
+        with open(self.doc_lengths_path, 'rb') as f:
+            self.doc_lengths = pickle.load(f)
 
     def get_documents(self, term: str) -> list[int]:
         doc_ids = self.index.get(term, set())
@@ -57,7 +64,9 @@ class InvertedIndex:
         tokens = tokenize_text(text)
         for token in set(tokens):
             self.index[token].add(doc_id)
+        token_count = len(tokens)
         self.term_frequencies[doc_id].update(tokens)
+        self.doc_lengths[doc_id] = token_count
 
     def get_tf(self, doc_id: int, term: str) -> int:
         tokens = tokenize_text(term)
@@ -93,6 +102,23 @@ class InvertedIndex:
         raw_tf = self.get_tf(doc_id, term)
         saturated_tf = (raw_tf * (k1 + 1)) / (raw_tf + k1)
         return saturated_tf
+
+    def __get_avg_doc_length(self) -> float:
+        """
+        Calculates and returns the average document length across all documents.
+        Handles the edge case where there are no documents (returns 0.0).
+        """
+        total_doc_count = len(self.doc_length)
+
+        if total_doc_count == 0:
+            return 0.0
+        
+        total_length = sum(self.doc_length.values())
+
+        avg_length = total_length / total_doc_count
+
+        return avg_length
+
 
 
 def build_command() -> None:

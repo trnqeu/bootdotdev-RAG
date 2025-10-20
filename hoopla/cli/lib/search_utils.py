@@ -2,6 +2,7 @@ import json
 import os
 
 BM25_K1 = 1.5
+BM25_B = 0.75
 DEFAULT_SEARCH_LIMIT = 5
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
