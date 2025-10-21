@@ -98,26 +98,39 @@ class InvertedIndex:
         idf = self.get_idf(term)
         return tf * idf
     
-    def get_bm25_tf(self, doc_id: int, term: str, k1: float = BM25_K1) -> float:
-        raw_tf = self.get_tf(doc_id, term)
-        saturated_tf = (raw_tf * (k1 + 1)) / (raw_tf + k1)
-        return saturated_tf
-
     def __get_avg_doc_length(self) -> float:
         """
         Calculates and returns the average document length across all documents.
         Handles the edge case where there are no documents (returns 0.0).
         """
-        total_doc_count = len(self.doc_length)
+        total_doc_count = len(self.doc_lengths)
 
         if total_doc_count == 0:
             return 0.0
         
-        total_length = sum(self.doc_length.values())
+        total_length = sum(self.doc_lengths.values())
 
         avg_length = total_length / total_doc_count
 
         return avg_length
+
+
+    def get_bm25_tf(self, doc_id: int, term: str, k1: float = BM25_K1, b: float = BM25_B) -> float:
+        raw_tf = self.get_tf(doc_id, term)
+        doc_length = self.doc_lengths[doc_id]
+
+        avg_doc_length = self.__get_avg_doc_length()
+
+        if avg_doc_length == 0.0:
+            # If there are no documents, the factor is 1 (no normalization)
+            length_norm = 1.0 
+        else:
+            # 2. Calculate the Length Normalization Factor
+            length_norm = 1 - b + b * (doc_length / avg_doc_length)
+
+        tf_component = (raw_tf * (k1 + 1)) / (raw_tf + k1 * length_norm)
+        return tf_component
+
 
 
 
@@ -196,7 +209,7 @@ def tfidf_command(doc_id: int, term: str) -> float:
     idx.load()
     return idx.get_tf_idf(doc_id, term)
 
-def bm25_tf_command(doc_id: int, term: str, k1:float = BM25_K1):
+def bm25_tf_command(doc_id: int, term: str, k1:float = BM25_K1, b: float = BM25_B):
     idx = InvertedIndex()
     idx.load()
-    return idx.get_bm25_tf(doc_id, term)
+    return idx.get_bm25_tf(doc_id, term, k1=k1, b=b)
