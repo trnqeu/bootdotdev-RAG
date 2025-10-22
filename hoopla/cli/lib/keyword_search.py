@@ -114,7 +114,6 @@ class InvertedIndex:
 
         return avg_length
 
-
     def get_bm25_tf(self, doc_id: int, term: str, k1: float = BM25_K1, b: float = BM25_B) -> float:
         raw_tf = self.get_tf(doc_id, term)
         doc_length = self.doc_lengths[doc_id]
@@ -131,8 +130,13 @@ class InvertedIndex:
         tf_component = (raw_tf * (k1 + 1)) / (raw_tf + k1 * length_norm)
         return tf_component
 
+    def bm25(self, doc_id: int, term: str) -> float:
+        bm25_tf = self.get_bm25_tf(doc_id, term)
+        bm25_idf = self.get_tf_idf(doc_id, term)
+        return bm25_tf * bm25_idf
 
-
+    def bm25_search(self, query: str, limit: int) -> list[dict]:
+        pass
 
 def build_command() -> None:
     idx = InvertedIndex()
