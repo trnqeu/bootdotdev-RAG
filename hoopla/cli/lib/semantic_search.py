@@ -1,5 +1,6 @@
 from sentence_transformers import SentenceTransformer
 import numpy as np
+import os
 
 
 class SemanticSearch:
@@ -16,13 +17,19 @@ class SemanticSearch:
         else:
             return self.model.encode([text])[0]
         
-    def build_embeddings(self, documents):
+    def build_embeddings(self, documents, cache_path='cache/movie_embeddings.npy'):
         self.documents = documents
-        for doc in self.documents.items():
-            self.document_map[doc.id] = doc
-        docs_list = [f"{doc['title']}: {doc['description']}" for doc in self.documents.items()]
+        for doc in self.documents:
+            self.document_map[doc['id']] = doc
+        docs_list = [f"{doc['title']}: {doc['description']}" for doc in self.documents]
+        self.embeddings = self.model.encode(docs_list, show_progress_bar=True)
+        np.save('cache/movie_embeddings.npy', self.embeddings)
+        # 4. Save to disk (Ensure directory exists)
+        os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+        np.save(cache_path, self.embeddings)
+        print(f"Embeddings saved to {cache_path}")
+        return self.embeddings
 
-    
 def verify_model():
     search = SemanticSearch()
     print(f"Model loaded: {search.model}")
