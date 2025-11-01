@@ -1,6 +1,11 @@
 from sentence_transformers import SentenceTransformer
 import numpy as np
+from pathlib import Path
 import os
+
+from .search_utils import (
+    load_movies
+)
 
 
 class SemanticSearch:
@@ -29,6 +34,23 @@ class SemanticSearch:
         np.save(cache_path, self.embeddings)
         print(f"Embeddings saved to {cache_path}")
         return self.embeddings
+    
+    def load_or_create_embeddings(self, documents):
+        self.documents = documents
+        for doc in self.documents:
+            self.document_map[doc['id']] = doc
+        embeddings_path = 'cache/movie_embeddings.npy'
+        path = Path(embeddings_path)
+
+        if path.is_file():
+            self.embeddings = np.load(path)
+            if len(self.embeddings) == len(self.documents):
+                return self.embeddings
+            else:
+                raise ValueError('len(self.embeddings) != len(self.documents)')
+        else:
+            return self.build_embeddings(documents)
+
 
 def verify_model():
     search = SemanticSearch()
@@ -44,6 +66,10 @@ def embed_text(text):
     print(f"First 3 dimensions: {embedding[:3]}")
     print(f"Dimensions: {embedding.shape[0]}")
 
-# text = 'pippo beveva la piooggia'
-
-# print(searcher.generate_embedding(text))
+def verify_embeddings():
+    search = SemanticSearch()
+    documents = load_movies()
+    search.load_or_create_embeddings(documents)
+    embeddings_shape = search.embeddings.shape
+    print(f"Loaded {len(documents)} movie documents.")
+    print(f"{embeddings_shape[0]} vectors in {embeddings_shape[1]} dimensions")
