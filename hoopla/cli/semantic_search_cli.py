@@ -1,14 +1,32 @@
 #!/usr/bin/env python3
 import argparse
-from lib.semantic_search import verify_model, embed_text, verify_embeddings
+from lib.semantic_search import (
+    SemanticSearch,
+    verify_model, 
+    embed_text, 
+    verify_embeddings, 
+    embed_query_text,
+    cosine_similarity,
+    create_chunks
+)
 
+from lib.search_utils import load_movies
 def main():
     parser = argparse.ArgumentParser(description="Semantic Search CLI")
     subparsers = parser.add_subparsers(dest='command', help='available commands')
     verify_parser = subparsers.add_parser("verify", help="Verify that the embedding model is loaded")
     embeddings_parser = subparsers.add_parser("verify_embeddings", help="Load or create embeddings and print details")
+    embedding_query_parser = subparsers.add_parser("embedquery", help = "Insert your query")
+    embedding_query_parser.add_argument("query", type=str, help = "query to embed")
     text_embed_parser = subparsers.add_parser("embed_text", help='text to be embedded')
     text_embed_parser.add_argument("text", type=str, help='text to be embedded')
+    search_parser = subparsers.add_parser("search", help="performs semantic search")
+    search_parser.add_argument("query", type=str, help='text to search')
+    search_parser.add_argument("--limit", type=int, default=5, help="Number of results to return")
+    chunk_parser = subparsers.add_parser("chunk", help="chunks the text")
+    chunk_parser.add_argument("text", type=str, help = "text to chunk")
+    chunk_parser.add_argument("--chunk-size", type=str, default=200, help = "size of the chunk")
+
 
     args = parser.parse_args()
 
@@ -21,6 +39,22 @@ def main():
 
         case 'verify_embeddings':
             verify_embeddings()
+        
+        case 'embedquery':
+            embed_query_text(args.query)
+
+        case 'chunk':
+            create_chunks(args.text, args.chunk_size)
+
+        case 'search':
+            searcher = SemanticSearch()
+            movies = load_movies()
+            searcher.load_or_create_embeddings(movies)
+            results = searcher.search(args.query, limit=args.limit)
+            for i, result in enumerate(results):
+                print(f"{i+1}. {result['title']} (score: {result['score']:.4f})")
+                print(f"    {result['description']}")
+                print()
 
         case _:
             parser.print_help()
