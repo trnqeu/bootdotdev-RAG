@@ -2,6 +2,7 @@ from sentence_transformers import SentenceTransformer
 import numpy as np
 from pathlib import Path
 import os
+import re
 
 from .search_utils import (
     load_movies
@@ -72,19 +73,126 @@ class SemanticSearch:
             })
         return results
 
-def create_chunks(self, text:str, chunk_size:int =200) -> list[str]:
-    words = text.split(" ")
+
+class ChunkedSemanticSearch(SemanticSearch):
+    def __init__(self, model_name='all-MiniLm-L6-v2') -> None:
+        super().__init__(model_name)
+        self.chunk_embeddings = None
+        self.chunk_metadata = None
+
+    def build_chunk_embeddings(self, documents, cache_path='cache/movie_embeddings.npy'):
+        self.documents = documents
+        for doc in self.documents:
+            self.document_map[doc['id']] = doc
+        all_chunks = []
+        self.chunk_metadata = []
+        for doc_idx, doc in enumerate(self.documents):
+            if not doc['description'] or doc['description'] == "":
+                continue
+            else:
+                description_chunks = create_semantic_chunks(
+                    doc['description'], 
+                    max_chunk_size = 4,
+                    overlap = 1
+                    )
+                total_chunks = len(description_chunks)
+
+                for chunk_idx, chunk_text in enumerate(description_chunks):
+                    all_chunks.append(chunk_text)
+
+                    metadata = {
+                        "movie_idx": doc['id'],
+                        "doc_index": doc_idx,
+                        "chunk_idx": chunk_idx,
+                        "total_chunks": total_chunks
+                    }
+                    self.chunk_metadata.append(metadata)
+
+               
+
+            
+
+
+        # docs_list = [f"{doc['title']}: {doc['description']}" for doc in self.documents]
+        # self.embeddings = self.model.encode(docs_list, show_progress_bar=True)
+        # np.save('cache/movie_embeddings.npy', self.embeddings)
+        # # 4. Save to disk (Ensure directory exists)
+        # os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+        # np.save(cache_path, self.embeddings)
+        # print(f"Embeddings saved to {cache_path}")
+        # return self.embeddings
+
+
+
+def create_chunks(text:str, chunk_size:int, overlap:int) -> list[str]:
+    # Placeholder/example logic for word-based chunking
+    words = text.split(" ") 
     chunks = []
-    for i in range(0, len(words), chunk_size):
-        chunk_words = words[i: i + chunk_size]
+    start_index = 0
+    step = chunk_size - overlap
+    if step < 1:
+        step = 1
+    while start_index < len(words):
+        end_index = start_index + chunk_size
+        chunk_words = words[start_index: end_index]
         chunk = " ".join(chunk_words)
         chunks.append(chunk)
+   
+        # Check if we've processed all words or if the last chunk is small enough
+        if end_index >= len(words):
+            break
+        
+        start_index += step
+
     total_chars = len(text)
     print(f"Chunking {total_chars} characters (Chunk Size: {chunk_size} words)")
     
-    # 3. Print each chunk in the numbered format
+    # Print each chunk in the numbered format
     for i, chunk in enumerate(chunks):
         print(f"{i+1}. {chunk}")
+    return chunks
+
+def create_semantic_chunks(text:str, max_chunk_size:int, overlap:int) -> list[str]:
+    # 1. Split the input into individual sentences by using the nasty regex.
+    # The regex r"(?<=[.!?])\s+" splits by space immediately following a period,
+    # question mark, or exclamation point, keeping the punctuation with the sentence.
+    sentences = re.split(r"(?<=[.!?])\s+", text)
+    # The re.split might leave an empty string at the end if the text ends with the delimiter pattern
+    sentences = [s for s in sentences if s] 
+
+    chunks = []
+    start_index = 0
+    step = max_chunk_size - overlap
+    # Ensure step is at least 1 to avoid an infinite loop or redundant step if overlap >= max_chunk_size
+    step = max(1, step)
+    
+    # 2. Chunk sentences with max_chunk_size and overlap
+    while start_index < len(sentences):
+        end_index = start_index + max_chunk_size
+        chunk_sentences = sentences[start_index: end_index]
+        # Join sentences back into a chunk string. We add a space after the period/punctuation
+        # because the re.split removes the trailing space from the sentence.
+        chunk = " ".join(chunk_sentences)
+        chunks.append(chunk)
+        
+        # Move the start index for the next chunk
+        start_index += step
+        
+        # Stop if the next start_index would result in a chunk with fewer sentences than the overlap,
+        # or if we've passed the end of the list. The last chunk should already be added.
+        if start_index >= len(sentences):
+            break
+
+    # 4. Print semantic chunk information
+    total_chars = len(text)
+    print(f"Semantically chunking {total_chars} characters")
+    
+    # 5. Print each chunk in the numbered format
+    for i, chunk in enumerate(chunks):
+        print(f"{i+1}. {chunk}")
+
+    # 6. Return a list of chunk strings
+    return chunks
 
 def verify_model():
     search = SemanticSearch()

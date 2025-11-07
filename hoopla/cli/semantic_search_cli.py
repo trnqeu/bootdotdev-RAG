@@ -7,7 +7,8 @@ from lib.semantic_search import (
     verify_embeddings, 
     embed_query_text,
     cosine_similarity,
-    create_chunks
+    create_chunks,
+    create_semantic_chunks
 )
 
 from lib.search_utils import load_movies
@@ -25,8 +26,12 @@ def main():
     search_parser.add_argument("--limit", type=int, default=5, help="Number of results to return")
     chunk_parser = subparsers.add_parser("chunk", help="chunks the text")
     chunk_parser.add_argument("text", type=str, help = "text to chunk")
-    chunk_parser.add_argument("--chunk-size", type=str, default=200, help = "size of the chunk")
-
+    chunk_parser.add_argument("--chunk-size", type=int, default=200, help = "size of the chunk")
+    chunk_parser.add_argument("--overlap", type=int, default=20, help = "chunk overlapping size")
+    semantic_chunk_parser = subparsers.add_parser("semantic_chunk", help="chunks the text")
+    semantic_chunk_parser.add_argument("text", type=str, help = "text to chunk")
+    semantic_chunk_parser.add_argument("--max-chunk-size", type=int, default=4, help = "size of the chunk")
+    semantic_chunk_parser.add_argument("--overlap", type=int, default=0, help = "chunk overlapping size")
 
     args = parser.parse_args()
 
@@ -44,7 +49,10 @@ def main():
             embed_query_text(args.query)
 
         case 'chunk':
-            create_chunks(args.text, args.chunk_size)
+            create_chunks(args.text, args.chunk_size, args.overlap)
+
+        case 'semantic_chunk':
+            create_semantic_chunks(args.text, args.max_chunk_size, args.overlap)
 
         case 'search':
             searcher = SemanticSearch()
