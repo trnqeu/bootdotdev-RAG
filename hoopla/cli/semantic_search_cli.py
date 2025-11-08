@@ -2,6 +2,7 @@
 import argparse
 from lib.semantic_search import (
     SemanticSearch,
+    ChunkedSemanticSearch,
     verify_model, 
     embed_text, 
     verify_embeddings, 
@@ -32,6 +33,8 @@ def main():
     semantic_chunk_parser.add_argument("text", type=str, help = "text to chunk")
     semantic_chunk_parser.add_argument("--max-chunk-size", type=int, default=4, help = "size of the chunk")
     semantic_chunk_parser.add_argument("--overlap", type=int, default=0, help = "chunk overlapping size")
+    embed_chunk_parser = subparsers.add_parser('embed_chunks', help="Load or create chunk embeddings")
+    
 
     args = parser.parse_args()
 
@@ -63,6 +66,12 @@ def main():
                 print(f"{i+1}. {result['title']} (score: {result['score']:.4f})")
                 print(f"    {result['description']}")
                 print()
+
+        case 'embed_chunks':
+            movies = load_movies()
+            chunk_searcher = ChunkedSemanticSearch()
+            embeddings = chunk_searcher.load_or_create_chunk_embeddings(movies)
+            print(f"Generated {len(embeddings)} chunked embeddings")
 
         case _:
             parser.print_help()
