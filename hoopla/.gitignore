@@ -12,7 +12,7 @@ wheels/
 
 # data
 data
-hoopla/cache
+cache
 
 # notes
 counter.py
