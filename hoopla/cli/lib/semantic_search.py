@@ -269,6 +269,47 @@ class ChunkedSemanticSearch(SemanticSearch):
             return self.chunk_embeddings
 
         return self.build_chunk_embeddings(documents)
+    
+    def search_chunks(self, query: str, limit: int = 10):
+        query_embed = self.generate_embedding(query)
+        chunk_scores = []
+
+        for i, chunk_embedding in enumerate(self.chunk_embeddings):
+            similarity = cosine_similarity(query_embed, chunk_embedding)
+            chunk_meta = self.chunk_metadata[i]
+            chunk_scores.append(
+                {
+                    "chunk_idx": chunk_meta["chunk_idx"],
+                    "movie_idx": chunk_meta["movie_idx"],
+                    "score": similarity
+                }
+            )
+        
+        movie_scores = {}
+        for chunk in chunk_scores:
+            movie_idx = chunk["movie_idx"]
+            score = chunk["score"]
+            if movie_idx not in movie_scores or score > movie_scores[movie_idx]:
+                movie_scores[movie_idx] = score
+
+        sorted_movies = sorted(
+            movie_scores.items(), key=lambda item: item[1], reverse=True
+        )
+
+        results = []
+
+        for movie_idx, score in sorted_movies[:limit]:
+            doc = self.documents[movie_idx]
+            results.append(
+                {
+                    "id": doc["id"],
+                    "title": doc["title"],
+                    "document": doc["description"][:100],
+                    "score": round(score, 4),
+                    "metadata": {},
+                }
+            )
+        return results
 
 
 def embed_chunks_command() -> np.ndarray:
