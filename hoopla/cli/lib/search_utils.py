@@ -56,3 +56,23 @@ def format_search_result(
         "score": round(score, SCORE_PRECISION),
         "metadata": metadata if metadata else {},
     }
+
+def normalize_scores(scores: list[float]) -> list[float]:
+    if not scores:
+        return []
+    else:
+        minimum = min(scores)
+        maximum = max(scores)
+        norm_scores = []
+        if minimum == maximum:
+            return [1.0 for s in scores]
+        for s in scores:
+            normalized = (s - minimum) / (maximum - minimum)
+            norm_scores.append(normalized)
+
+        return norm_scores
+
+
+
+def hybrid_score(bm25_score, semantic_score, alpha=0.5):
+    return alpha * bm25_score + (1 - alpha) * semantic_score
