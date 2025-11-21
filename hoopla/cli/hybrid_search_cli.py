@@ -1,5 +1,6 @@
 import argparse
 from lib.search_utils import normalize_scores
+from lib.hybrid_search import HybridSearch, weighted_search_command
 
 
 def main() -> None:
@@ -11,6 +12,15 @@ def main() -> None:
                                   nargs = "+",
                                   type=float,
                                   help="list of scores to be normalized")
+    
+    weighted_parser = subparsers.add_parser(
+        "weighted-search",
+        help="Perform weighted hybrid search",
+    )
+    weighted_parser.add_argument("query", type=str, help="Search query")
+    weighted_parser.add_argument("--alpha", type=float, default=0.5)
+    weighted_parser.add_argument("--limit", type=int, default=5)
+
     args = parser.parse_args()
 
     match args.command:
@@ -18,6 +28,16 @@ def main() -> None:
             normalized_scores = normalize_scores(args.scores)
             for n in normalized_scores:
                 print(f"* {n:.4f}")
+
+        case "weighted-search":
+            result = weighted_search_command(args.query, args.alpha, args.limit)
+            for i, doc in enumerate(result["results"], start=1):
+                print(f"{i}. {doc['title']}")
+                print(f"   Hybrid Score: {doc['hybrid']:.3f}")
+                print(f"   BM25: {doc['bm25']:.3f}, Semantic: {doc['semantic']:.3f}")
+                print(f"   {doc['document'][:100]}...")
+                print()
+
         case _:
             parser.print_help()
 
