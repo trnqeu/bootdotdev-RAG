@@ -27,7 +27,45 @@ class HybridSearch:
         normalized_bm25 = normalize_scores(bm25_scores)
         normalized_sem = normalize_scores(sem_scores)
         
+        docs: dict[str, dict] = {}
+
+        for result, norm in zip(bm25_results, normalized_bm25):
+            doc_id = result["id"]
+            docs[doc_id] = {
+                "id": doc_id,
+                "title": result["title"],
+                "document": result["document"],
+                "bm25": norm,
+                "semantic": 0.0,
+            }
+
+        for result, norm in zip(chunked_sem_results, normalized_sem):
+            doc_id = result['id']
+            if doc_id in docs:
+                docs[doc_id]["semantic"] = norm
+            else:
+                docs[doc_id] = {
+                    "id": doc_id,
+                    "title": result["title"],
+                    "document": result["document"],
+                    "bm25": 0.0,
+                    "semantic": norm}
+                
+        # compute hybrid scores        
+        for doc in docs.values():
+            bm25 = doc['bm25']
+            semantic = doc['semantic']
+            doc['hybrid'] = hybrid_score(bm25, semantic, alpha)
         
+        # sort by hybrid score, descending
+        sorted_docs = sorted(
+            docs.values(),
+            key=lambda d: d['hybrid'],
+            reverse=True,
+        )
+
+        return sorted_docs[:limit]
+
     def rrf_search(self, query, k, limit=10):
         raise NotImplementedError("RRF hybrid search is not implemented yet.")
     
