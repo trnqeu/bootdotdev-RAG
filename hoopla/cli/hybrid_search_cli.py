@@ -1,6 +1,6 @@
 import argparse
 from lib.search_utils import normalize_scores
-from lib.hybrid_search import HybridSearch, weighted_search_command
+from lib.hybrid_search import HybridSearch, weighted_search_command, rrf_search_command
 
 
 def main() -> None:
@@ -21,6 +21,15 @@ def main() -> None:
     weighted_parser.add_argument("--alpha", type=float, default=0.5)
     weighted_parser.add_argument("--limit", type=int, default=5)
 
+    rff_parser = subparsers.add_parser(
+        "rrf-search",
+        help = "performs reciprocal rank fusion"
+    )
+
+    rff_parser.add_argument("query", type=str, help="Search query")
+    rff_parser.add_argument("--k", type=int, default=60)
+    rff_parser.add_argument("--limit", type=int, default=5)
+
     args = parser.parse_args()
 
     match args.command:
@@ -38,6 +47,14 @@ def main() -> None:
                 print(f"   {doc['document'][:100]}...")
                 print()
 
+        case "rrf-search":
+            result = rrf_search_command(args.query, args.k, args.limit)
+            for i, doc in enumerate(result["results"], start=1):
+                print(f"{i}. {doc['title']}")
+                print(f"   RRF Score: {doc['rrf_score']:.3f}")
+                print(f"   BM25 Rank: {doc['bm25_rank']}, Semantic rank: {doc['semantic_rank']}")
+                print(f"   {doc['document'][:100]}...")
+                print()
         case _:
             parser.print_help()
 

@@ -70,7 +70,51 @@ class HybridSearch:
         return sorted_docs[:limit]
 
     def rrf_search(self, query, k, limit=10):
-        raise NotImplementedError("RRF hybrid search is not implemented yet.")
+        bm25_results = self._bm25_search(query=query, limit=500*limit)
+        chunked_sem_results = self.semantic_search.search_chunks(query=query, limit=500*limit)
+
+        docs: dict[str, dict] = {}
+
+        for rank, result in enumerate(bm25_results, start=1):
+            doc_id = result['id']
+            if result["id"] not in docs:
+                docs[doc_id] = {
+                    "id": doc_id,
+                    "title": result["title"],
+                    "document": result["document"],
+                    "bm25_rank": rank,
+                    "semantic_rank": None,
+                    "rrf_score": 0.0}
+                
+        for rank, result in enumerate(chunked_sem_results, start=1):
+            doc_id = result['id']
+            if doc_id in docs:
+                docs[doc_id]["semantic_rank"] = rank
+            else:
+                docs[doc_id] = {
+                    "id": doc_id,
+                    "title": result["title"],
+                    "document": result["document"],
+                    "bm25_rank": None,
+                    "semantic_rank": rank,
+                    "rrf_score": 0.0}
+                
+        # compute rrf        
+        for doc in docs.values():
+            bm25_rank = doc['bm25_rank']
+            semantic_rank = doc['semantic_rank']
+            if bm25_rank is not None:
+                doc['rrf_score'] += 1 / (k + bm25_rank)
+            if semantic_rank is not None:
+                doc['rrf_score'] += 1 / (k + semantic_rank)
+
+        sorted_docs = sorted(docs.values(), 
+                             key= lambda d: d['rrf_score'], 
+                             reverse = True)
+        
+        return sorted_docs[:limit]
+
+
     
 def weighted_search_command(query: str, alpha: float = 0.5, limit: int = DEFAULT_SEARCH_LIMIT) -> dict:
     # 1. load movies
@@ -84,4 +128,18 @@ def weighted_search_command(query: str, alpha: float = 0.5, limit: int = DEFAULT
         "query": query,
         "alpha": alpha,
         "results": results,
+    }
+
+def rrf_search_command(query: str, k: int = 60, limit:int = DEFAULT_SEARCH_LIMIT):
+    # 1. load movies
+    movies = load_movies()
+    # 2. create hybrid search
+    hybrid_search = HybridSearch(movies)
+    # 3. call rrf
+    results = hybrid_search.rrf_search(query, k, limit)
+    # 4. return results in a dictionary
+    return {
+        "query": query,
+        'k': k,
+        "results": results
     }
