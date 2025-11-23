@@ -29,6 +29,10 @@ def main() -> None:
     rff_parser.add_argument("query", type=str, help="Search query")
     rff_parser.add_argument("--k", type=int, default=60)
     rff_parser.add_argument("--limit", type=int, default=5)
+    rff_parser.add_argument("--enhance",
+                            type=str,
+                            choices=["spell"],
+                            help="Query enhancement method")
 
     args = parser.parse_args()
 
@@ -48,13 +52,23 @@ def main() -> None:
                 print()
 
         case "rrf-search":
-            result = rrf_search_command(args.query, args.k, args.limit)
-            for i, doc in enumerate(result["results"], start=1):
-                print(f"{i}. {doc['title']}")
-                print(f"   RRF Score: {doc['rrf_score']:.3f}")
-                print(f"   BM25 Rank: {doc['bm25_rank']}, Semantic rank: {doc['semantic_rank']}")
-                print(f"   {doc['document'][:100]}...")
-                print()
+            result = rrf_search_command(args.query, args.k, args.limit, args.enhance)
+            if result['enhanced_query']:
+                print( f"Enhanced query ({result['method']}): '{result['original_query']}' -> '{result['enhanced_query']}'\n")
+                for i, doc in enumerate(result["results"], start=1):
+                    print(f"{i}. {doc['title']}")
+                    print(f"   RRF Score: {doc['rrf_score']:.3f}")
+                    print(f"   BM25 Rank: {doc['bm25_rank']}, Semantic rank: {doc['semantic_rank']}")
+                    print(f"   {doc['document'][:100]}...")
+                    print()
+            else:
+                for i, doc in enumerate(result["results"], start=1):
+                    print(f"{i}. {doc['title']}")
+                    print(f"   RRF Score: {doc['rrf_score']:.3f}")
+                    print(f"   BM25 Rank: {doc['bm25_rank']}, Semantic rank: {doc['semantic_rank']}")
+                    print(f"   {doc['document'][:100]}...")
+                    print()
+
         case _:
             parser.print_help()
 

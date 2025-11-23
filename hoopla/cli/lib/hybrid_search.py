@@ -6,6 +6,18 @@ from .search_utils import (normalize_scores,
                            load_movies, 
                            DEFAULT_SEARCH_LIMIT)
 
+import os
+from dotenv import load_dotenv
+from google import genai
+from google.genai import types
+
+
+load_dotenv()
+api_key = os.environ.get("GEMINI_API_KEY")
+print(f"Using key {api_key[:6]}...")
+
+client = genai.Client(api_key=api_key)
+
 class HybridSearch:
     def __init__(self, documents):
         self.documents = documents
@@ -130,16 +142,47 @@ def weighted_search_command(query: str, alpha: float = 0.5, limit: int = DEFAULT
         "results": results,
     }
 
-def rrf_search_command(query: str, k: int = 60, limit:int = DEFAULT_SEARCH_LIMIT):
+def rrf_search_command(query: str, k: int = 60, limit:int = DEFAULT_SEARCH_LIMIT, enhance: str = None):
     # 1. load movies
     movies = load_movies()
     # 2. create hybrid search
     hybrid_search = HybridSearch(movies)
     # 3. call rrf
-    results = hybrid_search.rrf_search(query, k, limit)
-    # 4. return results in a dictionary
-    return {
-        "query": query,
-        'k': k,
-        "results": results
-    }
+    if enhance == None:
+        results = hybrid_search.rrf_search(query, k, limit)
+        # 4. return results in a dictionary
+        return {
+            "original_query": query,
+            'k': k,
+            'method': None,
+            'enhanced_query': None,
+            "results": results
+
+        }
+    elif enhance == "spell":
+        system_instruction = f"""Fix any spelling errors in this movie search query.
+
+            Only correct obvious typos. Don't change correctly spelled words.
+
+            Query: "{query}"
+
+            If no errors, return the original query.
+            Corrected:"""
+        response = client.models.generate_content(
+            model='gemini-2.0-flash-001',
+            config = types.GenerateContentConfig(
+                system_instruction = system_instruction
+            ),
+            contents = query)
+        enhanced_query = response.text.strip()
+        method = "spell"
+        results = hybrid_search.rrf_search(enhanced_query, k, limit)
+        return {
+            "original_query": query,
+            'k': k,
+            'method': method,
+            'enhanced_query': enhanced_query,
+            "results": results
+        }     
+
+        
