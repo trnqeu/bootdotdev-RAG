@@ -16,3 +16,6 @@ cache
 
 # notes
 counter.py
+
+# secrets
+.env
