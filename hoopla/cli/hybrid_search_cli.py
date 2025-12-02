@@ -31,8 +31,12 @@ def main() -> None:
     rff_parser.add_argument("--limit", type=int, default=5)
     rff_parser.add_argument("--enhance",
                             type=str,
-                            choices=["spell"],
+                            choices=["spell", "rewrite", "expand"],
                             help="Query enhancement method")
+    rff_parser.add_argument("--rerank-method",
+                            type=str,
+                            choices=['individual'],
+                            help="defines the optional rerank method")
 
     args = parser.parse_args()
 
@@ -52,7 +56,27 @@ def main() -> None:
                 print()
 
         case "rrf-search":
-            result = rrf_search_command(args.query, args.k, args.limit, args.enhance)
+            result = rrf_search_command(
+                args.query, args.k, args.limit, args.enhance, args.rerank_method
+                )
+            
+            if result.get('rerank_method') == 'individual':
+                print(f"Reranking top {args.limit} results using individual method...")
+                print(f"Reciprocal Rank Fusion Results for '{result['original_query']}' (k={result['k']}):\n")
+
+                if result.get('enhanced_query'):
+                    print(f"Enhanced query ({result['method']}): '{result['original_query']}' -> '{result['enhanced_query']}'\n")
+
+                for i, doc in enumerate(result["results"], start=1):
+                    print(f"{i}. {doc['title']}")
+                    print(f"   Rerank Score: {doc['rerank_score']:.3f}/10")
+                    print(f"   RRF Score: {doc['rrf_score']:.3f}")
+                    print(f"   BM25 Rank: {doc['bm25_rank']}, Semantic rank: {doc['semantic_rank']}")
+                    print(f"   {doc['document'][:100]}...")
+                    print()
+                return
+            
+
             if result['enhanced_query']:
                 print( f"Enhanced query ({result['method']}): '{result['original_query']}' -> '{result['enhanced_query']}'\n")
                 for i, doc in enumerate(result["results"], start=1):
