@@ -10,6 +10,7 @@ import os
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
+import time
 
 
 load_dotenv()
@@ -126,6 +127,53 @@ class HybridSearch:
         
         return sorted_docs[:limit]
 
+    def _rerank_individual(self, query: str, docs: list[dict]):
+        print("Reranking results with individual LLM calls...")
+
+        for doc in docs:
+            system_instruction = f"""Rate how well this movie matches the search query.
+
+            Query: "{query}"
+            Movie: {doc.get("title", "")} - {doc.get("document", "")}
+
+            Consider:
+            - Direct relevance to query
+            - User intent (what they're looking for)
+            - Content appropriateness
+
+            Rate 0-10 (10 = perfect match).
+            Give me ONLY the number in your response, no other text or explanation.
+
+            Score:"""
+
+            try:
+                # Call the LLM
+                response = client.models.generate_content(
+                    model='gemini-2.5-flash',
+                    config = types.GenerateContentConfig(
+                        system_instruction = system_instruction
+                    ),
+                    contents = query
+                )
+
+                # Extract and parse the score
+                score_text = response.text.strip()
+                try:
+                    score = float(score_text)
+
+                except ValueError:
+                    print(f"Warning: Could not parse LLM score for {doc['title']}. Received: '{score_text}'. Defaulting to 0.0.")
+                    score = 0.0
+            except Exception as e:
+                print(f"Error calling LLM for {doc['title']}: {e}. Defaulting to 0.0.")
+                score = 0.0 # Default score on API failure
+                
+                doc['rerank_score'] = score
+                
+                # Sleep for 3 seconds to avoid rate limits
+                time.sleep(3)
+
+        return docs
 
     
 def weighted_search_command(query: str, alpha: float = 0.5, limit: int = DEFAULT_SEARCH_LIMIT) -> dict:
