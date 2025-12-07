@@ -35,7 +35,7 @@ def main() -> None:
                             help="Query enhancement method")
     rff_parser.add_argument("--rerank-method",
                             type=str,
-                            choices=['individual'],
+                            choices=['individual', 'batch', 'cross_encoder'],
                             help="defines the optional rerank method")
 
     args = parser.parse_args()
@@ -60,21 +60,34 @@ def main() -> None:
                 args.query, args.k, args.limit, args.enhance, args.rerank_method
                 )
             
-            if result.get('rerank_method') == 'individual':
-                print(f"Reranking top {args.limit} results using individual method...")
-                print(f"Reciprocal Rank Fusion Results for '{result['original_query']}' (k={result['k']}):\n")
+            if result.get('rerank_method'):
+                
+                # ... (codice per intestazioni e enhanced_query, che sembra corretto)
 
-                if result.get('enhanced_query'):
-                    print(f"Enhanced query ({result['method']}): '{result['original_query']}' -> '{result['enhanced_query']}'\n")
+                print(f"Reciprocal Rank Fusion Results for '{result['original_query']}' (k={result['k']}):")
 
                 for i, doc in enumerate(result["results"], start=1):
                     print(f"{i}. {doc['title']}")
-                    print(f"   Rerank Score: {doc['rerank_score']:.3f}/10")
+                    
+                    if result.get('rerank_method') == 'batch' and 'rerank_rank' in doc:
+                        # METODO BATCH usa 'rerank_rank'
+                        print(f"   Rerank Rank: {doc['rerank_rank']}")
+                    elif result.get('rerank_method') == 'individual' and 'rerank_score' in doc:
+                        # METODO INDIVIDUALE usa 'rerank_score'
+                        print(f"   Rerank Score: {doc['rerank_score']:.3f}/10")
+                    elif result.get('rerank_method') == 'cross_encoder' and 'cross_encoder_score' in doc:
+                        # METODO cross_encoder
+                        print(f"   Cross Encoder Score: {doc['cross_encoder_score']:.3f}")
+                        
+                    # ... (resto della stampa: RRF Score, BM25/Semantic rank, document)
                     print(f"   RRF Score: {doc['rrf_score']:.3f}")
-                    print(f"   BM25 Rank: {doc['bm25_rank']}, Semantic rank: {doc['semantic_rank']}")
+                    bm25_rank = doc.get('bm25_rank') if doc.get('bm25_rank') is not None else 'N/A'
+                    semantic_rank = doc.get('semantic_rank') if doc.get('semantic_rank') is not None else 'N/A'
+                    print(f"   BM25 Rank: {bm25_rank}, Semantic Rank: {semantic_rank}")
                     print(f"   {doc['document'][:100]}...")
                     print()
-                return
+                return # Esci dopo la stampa del rerank
+    
             
 
             if result['enhanced_query']:

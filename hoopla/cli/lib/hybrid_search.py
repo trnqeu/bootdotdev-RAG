@@ -10,7 +10,9 @@ import os
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
+import json
 import time
+from sentence_transformers import CrossEncoder
 
 
 load_dotenv()
@@ -83,6 +85,11 @@ class HybridSearch:
         return sorted_docs[:limit]
 
     def rrf_search(self, query, k, limit=10, rerank_method=None):
+        if rerank_method:
+            fetch_limit = limit * 5
+        else:
+            fetch_limit = limit
+        
         bm25_results = self._bm25_search(query=query, limit=500*limit)
         chunked_sem_results = self.semantic_search.search_chunks(query=query, limit=500*limit)
 
@@ -125,8 +132,33 @@ class HybridSearch:
                              key= lambda d: d['rrf_score'], 
                              reverse = True)
         
-        return sorted_docs[:limit]
+        # Truncate to the appropriate limit for the re-rank phase
+        rrf_results = sorted_docs[:fetch_limit]
 
+        # If reranking is requested, rerank and re-sort
+        if rerank_method == 'individual':
+            reranked_docs = self._rerank_individual(query, rrf_results)
+
+            final_docs = sorted(
+                reranked_docs,
+                key = lambda d: d.get('rerank_score', 0.0),
+                reverse = True,
+            )
+        
+            return final_docs[:limit]
+        
+        elif rerank_method == 'batch':
+            reranked_docs = self._rerank_batch(query, rrf_results)
+            return reranked_docs[:limit]
+        
+        elif rerank_method == 'cross_encoder':
+            reranked_docs = self._rerank_cross_encoder(query, rrf_results)
+            return reranked_docs[:limit]
+        
+        return rrf_results[:limit]
+    
+        
+    
     def _rerank_individual(self, query: str, docs: list[dict]):
         print("Reranking results with individual LLM calls...")
 
@@ -149,7 +181,7 @@ class HybridSearch:
             try:
                 # Call the LLM
                 response = client.models.generate_content(
-                    model='gemini-2.5-flash',
+                    model='gemini-2.0-flash-001',
                     config = types.GenerateContentConfig(
                         system_instruction = system_instruction
                     ),
@@ -168,14 +200,104 @@ class HybridSearch:
                 print(f"Error calling LLM for {doc['title']}: {e}. Defaulting to 0.0.")
                 score = 0.0 # Default score on API failure
                 
-                doc['rerank_score'] = score
-                
-                # Sleep for 3 seconds to avoid rate limits
-                time.sleep(3)
+            doc['rerank_score'] = score
+            
+            # Sleep for 3 seconds to avoid rate limits
+            time.sleep(3)
 
         return docs
 
-    
+    def _rerank_batch(self, query: str, docs: list[dict]) -> list[dict]:
+        print(f"Reranking top {len(docs)} results using batch method...")
+
+        doc_list_str = "\n"
+        for i, doc in enumerate(docs, start=1):
+            doc_list_str += f"ID: {doc['id']}\nTitle: {doc.get('title')}\nSummary: {doc.get('document', '')}\n---\n"
+
+        system_instruction = f"""Rank these movies by relevance to the search query.
+
+        Query: "{query}"
+
+        Movies:
+        {doc_list_str}
+
+        Return ONLY the IDs in order of relevance (best match first). 
+        Return a valid JSON list, nothing else. 
+        For example:
+
+        [75, 12, 34, 2, 1]
+
+        """
+        try:
+            response = client.models.generate_content(
+                model = 'gemini-2.0-flash-001',
+                config = types.GenerateContentConfig(
+                    system_instruction = system_instruction
+                ),
+                contents = query
+            )
+
+
+            raw_response = response.text.strip()
+
+            if raw_response.startswith('```'):
+                # Split lines, remove the first (```json) and the last (```) line
+                lines = raw_response.split('\n')
+                # Join the lines back together, skipping the first and last
+                json_string = '\n'.join(lines[1:-1]).strip()
+            else:
+                # Assume it's a plain JSON string if it doesn't start with fences
+                json_string = raw_response
+            
+            # 2. Check if the cleaned string is empty or invalid (optional, but robust)
+            if not json_string.startswith('['):
+                 raise ValueError(f"Cleaned response is not a JSON list: {json_string}")
+                
+            rank_id_list = json.loads(json_string) # Load the cleaned string
+
+        except Exception as e:
+            print(f"Error calling LLM for batch reranking or parsing JSON: {e}")
+            print("Defaulting to original RRF order.")
+            rank_id_list = [doc['id'] for doc in docs]
+
+        # Assign a new rerank to each document
+        # map: doc_id -> new_rank
+        id_to_rank = {doc_id: rank + 1 for rank, doc_id in enumerate(rank_id_list)}
+
+        for doc in docs:
+            doc['rerank_rank'] = id_to_rank.get(doc['id'], len(docs) + 1)
+
+        # sort the list by the new rerank_rank
+        reranked_docs = sorted(
+            docs,
+            key=lambda d: d.get('rerank_rank', len(docs) + 1),
+            reverse = False
+        )
+
+        return reranked_docs
+
+    def _rerank_cross_encoder(self, query: str, docs: list[dict]) -> list[dict]:
+        print(f"Reranking top {len(docs)} results using cross_encoder method...")
+        cross_encoder = CrossEncoder('cross-encoder/ms-marco-TinyBERT-L2-v2')
+        pairs = []
+        for doc in docs:
+            doc_string = f"{doc.get('title', '')} - {doc.get("document", '')}"
+            pairs.append([query, doc_string])
+
+        scores = cross_encoder.predict(pairs)
+
+        for doc, score in zip(docs, scores):
+            doc['cross_encoder_score'] = score
+
+        reranked_docs = sorted(
+            docs,
+            key=lambda d: d.get('cross_encoder_score', -100.0),
+            reverse = True
+        )
+
+        return reranked_docs
+
+
 def weighted_search_command(query: str, alpha: float = 0.5, limit: int = DEFAULT_SEARCH_LIMIT) -> dict:
     # 1. load movies
     movies = load_movies()
@@ -195,16 +317,22 @@ def rrf_search_command(query: str, k: int = 60, limit:int = DEFAULT_SEARCH_LIMIT
     movies = load_movies()
     # 2. create hybrid search
     hybrid_search = HybridSearch(movies)
+
+    final_query = query
+    method = None
+    enhanced_query = None
     # 3. call rrf
+
     if enhance == None:
-        results = hybrid_search.rrf_search(query, k, limit)
+        results = hybrid_search.rrf_search(query, k, limit, rerank_method = rerank_method)
         # 4. return results in a dictionary
         return {
             "original_query": query,
             'k': k,
             'method': None,
             'enhanced_query': None,
-            "results": results
+            "results": results,
+            "rerank_method": rerank_method
 
         }
     
@@ -232,8 +360,9 @@ def rrf_search_command(query: str, k: int = 60, limit:int = DEFAULT_SEARCH_LIMIT
             ),
             contents = query)
         enhanced_query = response.text.strip()
+        final_query = enhanced_query
         method = "expand"
-        results = hybrid_search.rrf_search(enhanced_query, k, limit)
+        results = hybrid_search.rrf_search(final_query, k, limit)
         return {
             "original_query": query,
             'k': k,
@@ -270,8 +399,9 @@ def rrf_search_command(query: str, k: int = 60, limit:int = DEFAULT_SEARCH_LIMIT
             ),
             contents = query)
         enhanced_query = response.text.strip()
+        final_query = enhanced_query
         method = "rewrite"
-        results = hybrid_search.rrf_search(enhanced_query, k, limit)
+        results = hybrid_search.rrf_search(final_query, k, limit)
         return {
             "original_query": query,
             'k': k,
@@ -296,8 +426,9 @@ def rrf_search_command(query: str, k: int = 60, limit:int = DEFAULT_SEARCH_LIMIT
             ),
             contents = query)
         enhanced_query = response.text.strip()
+        final_query = enhanced_query
         method = "spell"
-        results = hybrid_search.rrf_search(enhanced_query, k, limit)
+        results = hybrid_search.rrf_search(final_query, k, limit)
         return {
             "original_query": query,
             'k': k,
