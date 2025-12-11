@@ -17,6 +17,17 @@ def calculate_precision_at_k(retrieved_titles: set, relevant_titles: set) -> flo
     # Precision@k = |True Positives| / |Retrieved|
     return len(true_positives) / len(retrieved_titles)
 
+def calculate_recall_at_k(retrieved_titles: set, relevant_titles: set) -> float:
+    """
+    Calculates Recall@k.
+    Recall@k = |True Positives| / |Total Relevant Items|
+    """
+    if not retrieved_titles:
+        return 1.0
+    else:
+        true_positives = retrieved_titles.intersection(relevant_titles)
+        return len(true_positives) / len(relevant_titles)
+
 def main():
     parser = argparse.ArgumentParser(description="Search Evaluation CLI")
     parser.add_argument(
@@ -62,8 +73,13 @@ def main():
         # calculate precision@k
         precision_at_k = calculate_precision_at_k(retrieved_titles, relevant_titles)
 
+        # calculate recall@k
+        recall_at_k = calculate_recall_at_k(retrieved_titles, relevant_titles)
+
         print(f"- Query: {query}")
         print(f"  - Precision@{limit}: {precision_at_k:.4f}")
+
+        print(f"  - Recall@{limit}: {recall_at_k:.4f}")
 
         print(f"  - Retrieved: {', '.join(retrieved_titles_list)}")
 
