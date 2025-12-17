@@ -157,8 +157,6 @@ class HybridSearch:
         
         return rrf_results[:limit]
     
-        
-    
     def _rerank_individual(self, query: str, docs: list[dict]):
         print("Reranking results with individual LLM calls...")
 

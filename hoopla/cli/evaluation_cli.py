@@ -28,6 +28,12 @@ def calculate_recall_at_k(retrieved_titles: set, relevant_titles: set) -> float:
         true_positives = retrieved_titles.intersection(relevant_titles)
         return len(true_positives) / len(relevant_titles)
 
+def calculate_f1_score(precision: float, recall: float) -> float:
+    """Calculates the F1 score (harmonic mean of precision and recall)."""
+    if (precision + recall) == 0:
+        return 0.0
+    return 2 * (precision * recall) / (precision + recall)
+
 def main():
     parser = argparse.ArgumentParser(description="Search Evaluation CLI")
     parser.add_argument(
@@ -76,10 +82,15 @@ def main():
         # calculate recall@k
         recall_at_k = calculate_recall_at_k(retrieved_titles, relevant_titles)
 
+        # f1 score
+        f1 = calculate_f1_score(precision_at_k, recall_at_k)
+
         print(f"- Query: {query}")
         print(f"  - Precision@{limit}: {precision_at_k:.4f}")
 
         print(f"  - Recall@{limit}: {recall_at_k:.4f}")
+
+        print(f"  - F1 Score: {f1:.4f}")
 
         print(f"  - Retrieved: {', '.join(retrieved_titles_list)}")
 
