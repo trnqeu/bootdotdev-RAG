@@ -135,6 +135,8 @@ class HybridSearch:
         # Truncate to the appropriate limit for the re-rank phase
         rrf_results = sorted_docs[:fetch_limit]
 
+        print(f"DEBUG: Results after RRF search: {[d['title'] for d in rrf_results[:5]]}")
+
         # If reranking is requested, rerank and re-sort
         if rerank_method == 'individual':
             reranked_docs = self._rerank_individual(query, rrf_results)
@@ -144,7 +146,8 @@ class HybridSearch:
                 key = lambda d: d.get('rerank_score', 0.0),
                 reverse = True,
             )
-        
+
+            print(f"DEBUG: Final results after re-ranking: {[d['title'] for d in reranked_docs[:5]]}")
             return final_docs[:limit]
         
         elif rerank_method == 'batch':
@@ -310,11 +313,18 @@ def weighted_search_command(query: str, alpha: float = 0.5, limit: int = DEFAULT
         "results": results,
     }
 
-def rrf_search_command(query: str, k: int = 60, limit:int = DEFAULT_SEARCH_LIMIT, enhance: str = None, rerank_method: str=None):
+def rrf_search_command(query: str, 
+                       k: int = 60, 
+                       limit:int = DEFAULT_SEARCH_LIMIT, 
+                       enhance: str = None, 
+                       rerank_method: str=None,
+                       evaluate: bool=False):
     # 1. load movies
     movies = load_movies()
     # 2. create hybrid search
     hybrid_search = HybridSearch(movies)
+
+    print(f"DEBUG: Original Query: {query}")
 
     final_query = query
     method = None
@@ -322,6 +332,7 @@ def rrf_search_command(query: str, k: int = 60, limit:int = DEFAULT_SEARCH_LIMIT
     # 3. call rrf
 
     if enhance == None:
+        print(f"DEBUG: Enhanced Query: {final_query}")
         results = hybrid_search.rrf_search(query, k, limit, rerank_method = rerank_method)
         # 4. return results in a dictionary
         return {
@@ -427,12 +438,60 @@ def rrf_search_command(query: str, k: int = 60, limit:int = DEFAULT_SEARCH_LIMIT
         final_query = enhanced_query
         method = "spell"
         results = hybrid_search.rrf_search(final_query, k, limit)
-        return {
-            "original_query": query,
-            'k': k,
-            'method': method,
-            'enhanced_query': enhanced_query,
-            "results": results
-        }     
+
+    if evaluate:
+        # Prepariamo la lista dei risultati formattata
+        formatted_results = [f"Title: {doc['title']}\nSummary: {doc['document']}\n---" for doc in results]
+        
+        prompt = f"""Rate how relevant each result is to this query on a 0-3 scale:
+
+Query: "{query}"
+
+Results:{chr(10).join(formatted_results)}
+
+Scale:
+- 3: Highly relevant
+- 2: Relevant
+- 1: Marginally relevant
+- 0: Not relevant
+
+Do NOT give any numbers out than 0, 1, 2, or 3.
+
+Return ONLY the scores in the same order you were given the documents. Return a valid JSON list, nothing else. For example:
+
+[2, 0, 3, 2, 0, 1]"""
+
+        try:
+            response = client.models.generate_content(
+                model='gemini-2.0-flash-001',
+                contents=prompt
+            )
+            
+            raw_response = response.text.strip()
+            # Pulizia JSON (Markdown fences)
+            if raw_response.startswith('```'):
+                lines = raw_response.split('\n')
+                json_string = '\n'.join(lines[1:-1]).strip()
+            else:
+                json_string = raw_response
+            
+            scores = json.loads(json_string)
+
+            # Stampa il report finale richiesto
+            print("\nEvaluation Report:")
+            for i, (doc, score) in enumerate(zip(results, scores), 1):
+                print(f"{i}. {doc['title']}: {score}/3")
+                
+        except Exception as e:
+            print(f"Error during LLM evaluation: {e}")
+
+    return {
+    "original_query": query,
+    'k': k,
+    'method': method,
+    'enhanced_query': enhanced_query,
+    "results": results,
+    "rerank_method": rerank_method # Fondamentale aggiungerlo qui!
+}     
 
         

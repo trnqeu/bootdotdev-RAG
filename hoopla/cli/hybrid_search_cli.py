@@ -37,6 +37,7 @@ def main() -> None:
                             type=str,
                             choices=['individual', 'batch', 'cross_encoder'],
                             help="defines the optional rerank method")
+    rff_parser.add_argument("--evaluate", action="store_true", help="Evaluate results using an LLM")
 
     args = parser.parse_args()
 
@@ -62,8 +63,6 @@ def main() -> None:
             
             if result.get('rerank_method'):
                 
-                # ... (codice per intestazioni e enhanced_query, che sembra corretto)
-
                 print(f"Reciprocal Rank Fusion Results for '{result['original_query']}' (k={result['k']}):")
 
                 for i, doc in enumerate(result["results"], start=1):
