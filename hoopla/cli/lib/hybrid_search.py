@@ -335,15 +335,15 @@ def rrf_search_command(query: str,
         print(f"DEBUG: Enhanced Query: {final_query}")
         results = hybrid_search.rrf_search(query, k, limit, rerank_method = rerank_method)
         # 4. return results in a dictionary
-        return {
-            "original_query": query,
-            'k': k,
-            'method': None,
-            'enhanced_query': None,
-            "results": results,
-            "rerank_method": rerank_method
+        # return {
+        #     "original_query": query,
+        #     'k': k,
+        #     'method': None,
+        #     'enhanced_query': None,
+        #     "results": results,
+        #     "rerank_method": rerank_method
 
-        }
+        # }
     
     elif enhance == "expand":
         system_instruction = f"""Expand this movie search query with related terms.
@@ -372,13 +372,13 @@ def rrf_search_command(query: str,
         final_query = enhanced_query
         method = "expand"
         results = hybrid_search.rrf_search(final_query, k, limit)
-        return {
-            "original_query": query,
-            'k': k,
-            'method': method,
-            'enhanced_query': enhanced_query,
-            "results": results
-        }
+        # return {
+        #     "original_query": query,
+        #     'k': k,
+        #     'method': method,
+        #     'enhanced_query': enhanced_query,
+        #     "results": results
+        # }
 
 
     elif enhance == "rewrite":
@@ -411,13 +411,13 @@ def rrf_search_command(query: str,
         final_query = enhanced_query
         method = "rewrite"
         results = hybrid_search.rrf_search(final_query, k, limit)
-        return {
-            "original_query": query,
-            'k': k,
-            'method': method,
-            'enhanced_query': enhanced_query,
-            "results": results
-        }
+        # return {
+        #     "original_query": query,
+        #     'k': k,
+        #     'method': method,
+        #     'enhanced_query': enhanced_query,
+        #     "results": results
+        # }
 
     elif enhance == "spell":
         system_instruction = f"""Fix any spelling errors in this movie search query.

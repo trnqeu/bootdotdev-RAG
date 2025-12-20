@@ -58,7 +58,12 @@ def main() -> None:
 
         case "rrf-search":
             result = rrf_search_command(
-                args.query, args.k, args.limit, args.enhance, args.rerank_method
+                args.query, 
+                args.k, 
+                args.limit, 
+                args.enhance, 
+                args.rerank_method,
+                evaluate = args.evaluate
                 )
             
             if result.get('rerank_method'):
