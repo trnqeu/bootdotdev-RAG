@@ -1,7 +1,7 @@
 import argparse
 from lib.search_utils import load_movies
 from lib.hybrid_search import HybridSearch, weighted_search_command, rrf_search_command
-
+from lib.augmented_generation import rag_command
 
 
 def main():
@@ -17,17 +17,14 @@ def main():
 
     match args.command:
         case "rag":
-            query = args.query
-            # do RAG stuff here
-            movies = load_movies()
-            result = rrf_search_command(
-                args.query, 
-                args.k, 
-                args.limit, 
-                args.enhance, 
-                args.rerank_method,
-                evaluate = args.evaluate
-                )
+            docs, answer = rag_command(args.query)
+            
+            print("Search Results:")
+            for doc in docs:
+                print(f" - {doc['title']}")
+
+            print("\nRAG Response:")
+            print(answer)
             
         case _:
             parser.print_help()

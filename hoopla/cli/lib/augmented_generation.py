@@ -24,12 +24,15 @@ def rag_command(query):
     movies = load_movies()
     search = HybridSearch(movies)
     docs = search.rrf_search(query, 60, 5)
+
+    context_text = "\n".join([f"- {doc['title']}: {doc.get('overview', '')}" for doc in docs])
+
     prompt = f"""Answer the question or provide information based on the provided documents. This should be tailored to Hoopla users. Hoopla is a movie streaming service.
 
     Query: {query}
 
     Documents:
-    {docs}
+    {context_text}
 
     Provide a comprehensive answer that addresses the query:"""
 
@@ -37,4 +40,4 @@ def rag_command(query):
             model='gemini-2.0-flash-001',
             contents = prompt)
     
-    return docs, response
+    return docs, response.text
