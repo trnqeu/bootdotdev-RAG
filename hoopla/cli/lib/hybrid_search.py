@@ -372,13 +372,7 @@ def rrf_search_command(query: str,
         final_query = enhanced_query
         method = "expand"
         results = hybrid_search.rrf_search(final_query, k, limit)
-        # return {
-        #     "original_query": query,
-        #     'k': k,
-        #     'method': method,
-        #     'enhanced_query': enhanced_query,
-        #     "results": results
-        # }
+       
 
 
     elif enhance == "rewrite":
@@ -411,14 +405,7 @@ def rrf_search_command(query: str,
         final_query = enhanced_query
         method = "rewrite"
         results = hybrid_search.rrf_search(final_query, k, limit)
-        # return {
-        #     "original_query": query,
-        #     'k': k,
-        #     'method': method,
-        #     'enhanced_query': enhanced_query,
-        #     "results": results
-        # }
-
+       
     elif enhance == "spell":
         system_instruction = f"""Fix any spelling errors in this movie search query.
 
